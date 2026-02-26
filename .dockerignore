@@ -1,0 +1,7 @@
+.git
+.gitignore
+.gitkeep
+*.md
+*.iml
+.idea
+build.sh
