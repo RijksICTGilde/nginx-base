@@ -1,0 +1,52 @@
+name: Publish Base Image
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate CalVer tag
+        id: version
+        run: |
+          YEAR_MONTH=$(date +%Y.%m)
+          EXISTING=$(git tag --list "${YEAR_MONTH}.*" | sort -V | tail -n1)
+          if [ -z "$EXISTING" ]; then
+            PATCH=0
+          else
+            LAST_PATCH=${EXISTING##*.}
+            PATCH=$((LAST_PATCH + 1))
+          fi
+          VERSION="${YEAR_MONTH}.${PATCH}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/rijksictgilde/nginx-base:${{ steps.version.outputs.version }}
+            ghcr.io/rijksictgilde/nginx-base:latest
+
+      - name: Create git tag
+        run: |
+          git tag ${{ steps.version.outputs.version }}
+          git push origin ${{ steps.version.outputs.version }}
