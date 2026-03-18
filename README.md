@@ -1,36 +1,73 @@
 # nginx-base
 
-Minimal nginx container for serving static websites. Runs as non-root on a read-only filesystem.
+[![Latest version](https://ghcr-badge.egpl.dev/rijksictgilde/nginx-base/latest_tag?trim=major&label=latest)](https://github.com/RijksICTGilde/nginx-base/pkgs/container/nginx-base)
 
-## Quick start
+Hardened, non-root nginx base image for serving static websites in government production environments.
 
-Run the build script and follow the prompts:
+Published to `ghcr.io/rijksictgilde/nginx-base` using [CalVer](https://calver.org/) (`YYYY.MM.PATCH`).
+
+## Usage
+
+In your project's `Dockerfile`:
+
+```dockerfile
+FROM ghcr.io/rijksictgilde/nginx-base:2026.03.0
+
+COPY dist/ /usr/share/nginx/html/
+```
+
+Then build and run:
+
+```bash
+docker build -t my-site .
+docker run -p 8080:8080 my-site
+```
+
+## What's included
+
+- **Non-root** — runs as uid 101, no root escalation
+- **Read-only root filesystem** — only `/tmp` is writable
+- **Security headers** — `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Strict-Transport-Security`
+- **Server version hidden** — `server_tokens off`
+- **Gzip compression** — for text, JSON, JS, CSS, SVG
+- **Static asset caching** — 1 year cache for JS, CSS, images, fonts
+- **Port 8080** — unprivileged port, ready for Kubernetes
+
+## Local testing
+
+To quickly test with a local site:
 
 ```bash
 ./build.sh
 ```
 
-It will ask for:
-- The path to your website files (e.g. `../my-project/dist`)
-- An image name and tag (defaults to `my-site:latest`)
+It builds the base image locally, then asks for the path to your site files (defaults to `./example`) and an image name. Run the result with `docker run -p 8080:8080 my-site`.
 
-The script copies your site into `public/`, builds the Docker image, and you're ready to go:
+## Keeping up to date
 
-```bash
-docker run -p 8080:8080 my-site:latest
+Add [Dependabot](https://docs.github.com/en/code-security/dependabot) to your project to get automatic PRs when new versions are published:
+
+```yaml
+# .github/dependabot.yml
+version: 2
+updates:
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
 ```
 
-## Manual usage
+## CI/CD
 
-If you prefer to skip the script:
-
-1. Copy your static site files into the `public/` directory
-2. Build: `docker build -t my-site .`
-3. Run: `docker run -p 8080:8080 my-site`
+Every push to `main` automatically:
+1. Runs security tests and [Trivy](https://trivy.dev/) CVE scanning
+2. Builds and publishes to GHCR with an auto-incremented CalVer tag
+3. Creates a matching git tag
 
 ## Cluster compatibility
 
-- Runs as non-root (uid 101)
+- Non-root (uid 101)
 - Read-only root filesystem (writable `/tmp` only)
 - Listens on port 8080
 - Minimal footprint: 1 worker, 128 connections
+- No `HEALTHCHECK` — use Kubernetes liveness/readiness probes instead

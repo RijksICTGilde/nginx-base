@@ -1,0 +1,58 @@
+name: Publish Base Image
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate CalVer tag
+        id: version
+        run: |
+          YEAR_MONTH=$(date +%Y.%m)
+          EXISTING=$(git tag --list "${YEAR_MONTH}.*" | sort -V | tail -n1)
+          if [ -z "$EXISTING" ]; then
+            PATCH=0
+          else
+            LAST_PATCH=${EXISTING##*.}
+            PATCH=$((LAST_PATCH + 1))
+          fi
+          VERSION="${YEAR_MONTH}.${PATCH}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/rijksictgilde/nginx-base:${{ steps.version.outputs.version }}
+            ghcr.io/rijksictgilde/nginx-base:latest
+
+      - name: Update version references and create tag
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          sed -i "s|ghcr.io/rijksictgilde/nginx-base:[0-9]\{4\}\.[0-9]\{2\}\.[0-9]*|ghcr.io/rijksictgilde/nginx-base:${VERSION}|g" README.md example/Dockerfile
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md example/Dockerfile
+          git diff --cached --quiet || git commit -m "Update version references to ${VERSION}"
+          git tag "$VERSION"
+          git push origin main --tags

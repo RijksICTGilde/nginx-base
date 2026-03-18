@@ -12,8 +12,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build image
-        run: docker build -t nginx-base-test .
+      - name: Build base image
+        run: docker build -t nginx-base .
+
+      - name: Build test image with sample content
+        run: |
+          mkdir -p /tmp/test-site
+          echo '<html><body>ok</body></html>' > /tmp/test-site/index.html
+          cat <<'DOCKERFILE' > /tmp/test-site/Dockerfile
+          FROM nginx-base
+          COPY index.html /usr/share/nginx/html/index.html
+          DOCKERFILE
+          docker build -t nginx-base-test /tmp/test-site
+
+      - name: Trivy CVE scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: nginx-base
+          format: table
+          exit-code: '1'
+          severity: CRITICAL,HIGH
 
       - name: Dump versions
         run: |
@@ -59,6 +77,7 @@ jobs:
           echo "$HEADERS" | grep -qi "x-content-type-options: nosniff" || { echo "FAIL: missing X-Content-Type-Options"; exit 1; }
           echo "$HEADERS" | grep -qi "x-frame-options: SAMEORIGIN" || { echo "FAIL: missing X-Frame-Options"; exit 1; }
           echo "$HEADERS" | grep -qi "referrer-policy" || { echo "FAIL: missing Referrer-Policy"; exit 1; }
+          echo "$HEADERS" | grep -qi "strict-transport-security" || { echo "FAIL: missing Strict-Transport-Security"; exit 1; }
 
       - name: Verify version not exposed
         run: |

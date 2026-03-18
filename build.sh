@@ -2,9 +2,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PUBLIC_DIR="${SCRIPT_DIR}/public"
 
-read -rp "Path to website files: " SITE_PATH
+echo "Building base image..."
+docker build -t nginx-base-local "${SCRIPT_DIR}"
+
+read -rp "Path to website files [./example]: " SITE_PATH
+SITE_PATH="${SITE_PATH:-./example}"
 
 if [ ! -d "$SITE_PATH" ]; then
     echo "Error: '${SITE_PATH}' is not a directory"
@@ -20,17 +23,12 @@ fi
 read -rp "Image name [my-site]: " IMAGE_NAME
 IMAGE_NAME="${IMAGE_NAME:-my-site}"
 
-read -rp "Image tag [latest]: " IMAGE_TAG
-IMAGE_TAG="${IMAGE_TAG:-latest}"
-
-echo "Copying website files..."
-rm -rf "${PUBLIC_DIR:?}"/*
-cp -a "${SITE_PATH}"/. "${PUBLIC_DIR}/"
-echo "Copied to public/"
-
-echo "Building ${IMAGE_NAME}:${IMAGE_TAG}..."
-docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" "${SCRIPT_DIR}"
+echo "Building site image..."
+docker build -t "${IMAGE_NAME}" -f - "${SITE_PATH}" <<'DOCKERFILE'
+FROM nginx-base-local
+COPY . /usr/share/nginx/html/
+DOCKERFILE
 
 echo ""
 echo "Done! Run with:"
-echo "  docker run -p 8080:8080 ${IMAGE_NAME}:${IMAGE_TAG}"
+echo "  docker run -p 8080:8080 ${IMAGE_NAME}"
